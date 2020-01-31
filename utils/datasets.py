@@ -13,25 +13,30 @@ class TinyImagenet(Dataset):
     Images are (3 x 64 x 64).
     This object, when called, will return the loaded image pixel values and the class ID and intiger label.
     """
-    def __init__(self, base_dir='../data/tiny-imagenet-200', split='train', transform=None):
+    def __init__(self, perc_per_class=100, base_dir='../data/tiny-imagenet-200', split='train', transform=None):
         assert split == 'train' or split == 'val', "Provide 'train' or 'val' as split"
         self.split = split
 
         # Get ground truth label matching
         df = pd.read_csv(os.path.join(base_dir, 'labels.txt'), delim_whitespace=True, header=None)
-        df = df.rename(columns={0: 'id', 1: 'label', 2: 'class'})
-
+        df = df.rename(columns={0: 'id', 1: 'orig_label', 2: 'class'})
+        classes = os.listdir(os.path.join(base_dir, 'train'))
+        self.labels = df[df['id'].isin(classes)]
+        self.labels['label'] = range(0, len(classes))
         # A list of the image paths to load
+        per_class = 500 * (perc_per_class/100.0)
+        
         if split == 'train':
-            classes = os.listdir(os.path.join(base_dir, split))
-            self.labels = df[df['id'].isin(classes)]
             self.images = glob.glob(os.path.join(base_dir, split, '*', 'images', '*'))
+            image_names = [image.split('/')[-1] for image in self.images]
+            image_classes = [image.split('_')[0] for image in image_names]
+            train_annotations = pd.DataFrame(data={'image_name': self.images, 'id': image_classes}).sort_values(by='id')
+            self.images = train_annotations.groupby(['id']).head(per_class)['image_name'].values
         else:
-            classes = pd.read_csv(os.path.join(base_dir, split, 'val_annotations.txt'), header=None, delimiter='\t')
-            self.__val_classes = classes.rename(columns={1: 'id', 0:'image_name'})
-            classes = df['id'].values
-            self.labels = df[df['id'].isin(classes)]
-            self.images = glob.glob(os.path.join(base_dir, split, 'images', '*'))
+            self.__val_classes  = pd.read_csv(os.path.join(base_dir, split, 'val_annotations.txt'), header=None, delimiter='\t')
+            self.__val_classes = self.__val_classes .rename(columns={1: 'id', 0:'image_name'})
+            self.images = self.__val_classes.groupby(['id']).head(per_class)['image_name'].values
+            self.images = [os.path.join(base_dir, split, 'images', im) for im in self.images]
 
         # Transformations for images
         if transform is None:
@@ -65,6 +70,7 @@ class TinyImagenet(Dataset):
 
 def test_functionality():
     test = TinyImagenet(split='train')
+    print(len(test))
     test_loader = DataLoader(test, shuffle=False, batch_size=1) 
     for inputs, targets in test_loader:
         print(inputs)
