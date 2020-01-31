@@ -3,10 +3,10 @@ import glob
 import pdb
 import pandas as pd
 from PIL import Image
-
+from scipy.io import loadmat
 from torchvision import transforms
 from torch.utils.data import DataLoader, Dataset
-
+import torch
 
 class TinyImagenet(Dataset):
     """
@@ -68,8 +68,61 @@ class TinyImagenet(Dataset):
         return image, labels
 
 
-def test_functionality():
-    test = TinyImagenet(split='train')
+class SVHN(Dataset):
+    """
+    Images are (3 x 64 x 64).
+    This object, when called, will return the loaded image pixel values and the class ID and intiger label.
+    """
+    def __init__(self, perc_per_class=100, base_dir='../data/svhn', split='train', transform=None):
+        # Load data
+        path = os.path.join(base_dir, split+'_32x32.mat')
+        data = loadmat(path)
+        self.images = data['X'].reshape(data['X'].shape[-1], data['X'].shape[2], data['X'].shape[0], data['X'].shape[1])
+        self.targets = data['y']
+        del data
+
+        # Transformations for images
+        if transform is None:
+            normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                             std=[0.229, 0.224, 0.225])
+            self.transform = transforms.Compose([transforms.ToTensor(), normalize])
+        else:
+            self.transform = transform
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index):
+        # Load image
+        image = self.images[index]
+        image = Image.frombytes('RGB', (32, 32), image)
+        image = self.transform(image)
+
+        # Use class ID to get label information
+        label = self.targets[index][0]
+        if label == 10:
+            label = 0
+        labels = {'label': label}
+        return image, labels
+
+
+def test_functionality_imagenet():
+    test = TinyImagenet(split='train', base_dir='/home/mschiappa/PycharmProjects/UCFAdvancedComputerVision/data/tiny-imagenet-200')
+    print(len(test))
+    test_loader = DataLoader(test, shuffle=False, batch_size=128) 
+    for inputs, targets in test_loader:
+        print(inputs)
+        print(targets)
+        break
+    return inputs, targets
+
+
+def test_functionality_svhn():
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                             std=[0.229, 0.224, 0.225])
+    resize = (64, 64)
+    transform = transforms.Compose([transforms.Resize(resize), transforms.ToTensor(), normalize]) 
+    test = SVHN(split='train', transform=transform, base_dir='/home/mschiappa/PycharmProjects/UCFAdvancedComputerVision/data/svhn')
     print(len(test))
     test_loader = DataLoader(test, shuffle=False, batch_size=1) 
     for inputs, targets in test_loader:
@@ -79,4 +132,4 @@ def test_functionality():
     return inputs, targets
 
 if __name__ == '__main__':
-    test_functionality()
+    test_functionality_svhn()

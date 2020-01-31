@@ -11,14 +11,16 @@ from multiprocessing import cpu_count
 import torch
 from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader
+from torchvision import models
+from torchvision.models._utils import IntermediateLayerGetter
 
 # Local
 from utils.metrics import *
-from utils.model import MyModel
-from utils.datasets import TinyImagenet
+from utils.model import MyModel, AlexNetFine
+from utils.datasets import TinyImagenet, SVHN
 
 
-def run_experiment(num_conv, dataset, data_path, perc_class=100, batch_size=128, epochs=100, num_classes=200, train=True): 
+def run_experiment(dataset, data_path, num_conv=3, fine_tune=False, perc_class=100, batch_size=128, epochs=100, num_classes=200, train=True, transform=None): 
     """
     Args: 
         num_conv: The number of graphical convolutions to run on the graphical representation of the ResNet output. 
@@ -28,20 +30,27 @@ def run_experiment(num_conv, dataset, data_path, perc_class=100, batch_size=128,
         epochs (int): the number of epochs to run for training, default is None
         num_classes: the number of classes
     """
+    
     # Set up the model
-    model = MyModel(num_conv)
-    exp_name = 'convs'+str(num_conv)+'_perc'+str(perc_class)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
+    if fine_tune:
+        model = AlexNetFine()
+        exp_name = 'finetune_alexnet'
+        model = model.to(device)
+    else:
+        model = MyModel(num_conv)
+        exp_name = 'convs'+str(num_conv)+'_perc'+str(perc_class)
+        model = model.to(device)
+    
     optimizer = torch.optim.SGD(params=model.parameters(), lr=0.1, momentum=0.9, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 50)
     criterion = torch.nn.CrossEntropyLoss()
     best_acc = 0.0
-    
+
     # Load the data
-    dataset = {'imagenet': TinyImagenet, 'svhn': None}
-    train_dataset = TinyImagenet(perc_per_class=perc_class, base_dir=data_path, split='train')
-    val_dataset = TinyImagenet(perc_per_class=perc_class, base_dir=data_path, split='val')
+    data_obj = {'imagenet': TinyImagenet, 'svhn': SVHN}
+    train_dataset = data_obj[dataset](perc_per_class=perc_class, base_dir=data_path, split='train', transform=transform)
+    val_dataset = data_obj[dataset](perc_per_class=perc_class, base_dir=data_path, split='val', transform=transform)
     dataloader = dict()
     dataloader['training'] = DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=cpu_count(), shuffle=True)
     dataloader['training_length'] = len(train_dataset)
@@ -119,13 +128,17 @@ def run_model(epoch, model, criterion, optimizer, dataloader,  datalength, devic
         # Send inputs and outputs to device which is either 'cpu' or 'cuda'
         inputs = inputs.to(device)
         inputs = torch.autograd.Variable(inputs)
-        # pdb.set_trace()
         # Forward Pass,
         outputs = model(inputs)
         
         # measure accuracy and record loss
-        labels = targets['label'].to(device)
-        loss = criterion(outputs, labels)
+        labels = targets['label'].to(device).type(torch.long)
+        if len(labels.shape) < 1:
+            labels = labels.squeeze(1).type(torch.long)
+        try:
+            loss = criterion(outputs, labels)
+        except RuntimeError:
+            pdb.set_trace()
         losses.update(loss.data.item(), inputs.size(0))
         prec1, prec5 = accuracy(outputs.data, labels, topk=(1, 5))
         top1.update(prec1.item(), inputs.size(0))

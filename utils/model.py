@@ -1,6 +1,8 @@
 import pdb
 # Local
 from utils.layers import BasicConv2d as conv_block
+from utils import datasets
+
 import numpy as np
 import torch
 from torch import nn
@@ -111,9 +113,30 @@ class MyModel(nn.Module):
         edges = edges.to(self.device)
         return edges
 
-def test_functionality():
-    import datasets
-    inputs, targets = datasets.test_functionality()
+class AlexNetFine(nn.Module):
+    def __init__(self):
+        super(AlexNetFine, self).__init__()
+        alexnet = models.alexnet(pretrained=True)
+        self.alexnet = IntermediateLayerGetter(alexnet, return_layers={'avgpool':'out'})
+        self.classifier = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(256 * 6 * 6, 4096),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(inplace=True),
+            nn.Linear(4096, 10),
+        )
+
+    def forward(self, x):
+        x = self.alexnet(x)['out']
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        return x
+
+
+def test_functionality_imagenet():
+    inputs, targets = datasets.test_functionality_imagenet()
     model = MyModel()
     node_features, edge_list = model(inputs)
     in_channels = node_features.shape[-1]
@@ -123,5 +146,11 @@ def test_functionality():
     return node_features, edge_list
 
 
+def test_functionality_svhn():
+    inputs, targets = datasets.test_functionality_svhn()
+    model = AlexNetFine()
+    x = model(inputs)
+    return 
+
 if __name__ == '__main__':
-    test_functionality()
+    test_functionality_svhn()
