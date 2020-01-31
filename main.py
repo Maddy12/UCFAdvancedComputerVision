@@ -36,7 +36,8 @@ def run_experiment(num_conv, dataset, data_path, perc_class=100, batch_size=128,
     optimizer = torch.optim.SGD(params=model.parameters(), lr=0.1, momentum=0.9, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 50)
     criterion = torch.nn.CrossEntropyLoss()
-
+    best_acc = 0.0
+    
     # Load the data
     dataset = {'imagenet': TinyImagenet, 'svhn': None}
     train_dataset = TinyImagenet(perc_per_class=perc_class, base_dir=data_path, split='train')
