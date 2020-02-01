@@ -1,7 +1,7 @@
 import pdb
 # Local
 from utils.layers import BasicConv2d as conv_block
-from utils import datasets
+import datasets
 
 import numpy as np
 import torch
