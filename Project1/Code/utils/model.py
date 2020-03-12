@@ -1,7 +1,7 @@
 import pdb
 # Local
 from utils.layers import BasicConv2d as conv_block
-import datasets
+from utils import datasets
 
 import numpy as np
 import torch
@@ -38,7 +38,7 @@ class MyModel(nn.Module):
             self.convolutions['conv'+str(conv+1)] = GCNConv(2048, 2048).to(self.device)
             self.convolutions['pool'+str(conv+1)] = TopKPooling(2048, ratio=.6).to(self.device)
 
-        # Final Output
+        #Final Output
         self.lin1 = torch.nn.Linear(2048, 1024).to(self.device)
         self.lin2 = torch.nn.Linear(1024, 1024).to(self.device)
         self.lin3 = torch.nn.Linear(1024, classes).to(self.device)
@@ -65,6 +65,7 @@ class MyModel(nn.Module):
             else:
                 batches = torch.cat([batches, _x])
         x = batches.to(self.device)
+        # x = self.classifier(x)
         # (N, 1, 2048)
         x = self.lin1(x)
         x = self.act1(x)
@@ -114,7 +115,7 @@ class MyModel(nn.Module):
         return edges
 
 class AlexNetFine(nn.Module):
-    def __init__(self):
+    def __init__(self, classes=10):
         super(AlexNetFine, self).__init__()
         alexnet = models.alexnet(pretrained=True)
         self.alexnet = IntermediateLayerGetter(alexnet, return_layers={'avgpool':'out'})
@@ -125,7 +126,7 @@ class AlexNetFine(nn.Module):
             nn.Dropout(),
             nn.Linear(4096, 4096),
             nn.ReLU(inplace=True),
-            nn.Linear(4096, 10),
+            nn.Linear(4096, classes),
         )
 
     def forward(self, x):

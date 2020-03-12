@@ -34,7 +34,11 @@ def run_experiment(dataset, data_path, num_conv=3, fine_tune=False, perc_class=1
     # Set up the model
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     if fine_tune:
-        model = AlexNetFine()
+        if dataset == 'imagenet':
+            nclasses = 200
+        elif dataset == 'svhn':
+            nclasses = 10
+        model = AlexNetFine(nclasses)
         exp_name = 'finetune_alexnet'
         model = model.to(device)
     else:
@@ -121,8 +125,8 @@ def run_model(epoch, model, criterion, optimizer, dataloader,  datalength, devic
 
     # Initialize model performance tracking metrics
     losses = Metrics()
-    top1 = Metrics()
-    top5 = Metrics()
+    results = Metrics()
+    # top5 = Metrics()
 
     for batch_idx, (inputs, targets) in enumerate(dataloader):
         # Send inputs and outputs to device which is either 'cpu' or 'cuda'
@@ -130,7 +134,7 @@ def run_model(epoch, model, criterion, optimizer, dataloader,  datalength, devic
         inputs = torch.autograd.Variable(inputs)
         # Forward Pass,
         outputs = model(inputs)
-        
+
         # measure accuracy and record loss
         labels = targets['label'].to(device).type(torch.long)
         if len(labels.shape) < 1:
@@ -140,9 +144,9 @@ def run_model(epoch, model, criterion, optimizer, dataloader,  datalength, devic
         except RuntimeError:
             pdb.set_trace()
         losses.update(loss.data.item(), inputs.size(0))
-        prec1, prec5 = accuracy(outputs.data, labels, topk=(1, 5))
-        top1.update(prec1.item(), inputs.size(0))
-        top5.update(prec5.item(), inputs.size(0))
+        acc = accuracy(outputs.data, labels, topk=(1, 5))
+        results.update(acc.item(), inputs.size(0))
+        # top5.update(prec5.item(), inputs.size(0))
     
         # Backward Pass: compute gradient and do SGD step
         if train:   
@@ -150,18 +154,17 @@ def run_model(epoch, model, criterion, optimizer, dataloader,  datalength, devic
             loss.backward()
             optimizer.step()
         
-        bar.suffix = '({batch}/{size}) | Total: {total:} | Epoch: {epoch:} | OrigLoss: {loss:.4f} | top1: {top1: .4f} | top5: {top5: .4f}'.format(
+        bar.suffix = '({batch}/{size}) | Total: {total:} | Epoch: {epoch:} | Loss: {loss:.4f} | Acc: {acc: .4f}'.format(
             batch=batch_idx + 1,
             size=len(dataloader),
             total=bar.elapsed_td,
             epoch=epoch+1,
             loss=losses.avg,
-            top1=top1.avg,
-            top5=top5.avg,
+            acc=results.avg,
         )
         bar.next() 
     bar.finish()
-    return losses.avg, top1.avg
+    return losses.avg, results.avg
 
 
 def save_checkpoint(state, is_best, checkpoint):
@@ -201,4 +204,21 @@ def test_functionality():
     run_experiment(num_conv, dataset, data_path, perc_class=100, batch_size=64, epochs=100, num_classes=200, train=True)
 
 if __name__=='__main__':
-    test_functionality()
+    from utils import plotting
+    import json
+    results = json.load(open('/home/mschiappa/PycharmProjects/UCFAdvancedComputerVision/plots/results.json', 'r'))
+    outdir = '/home/mschiappa/PycharmProjects/UCFAdvancedComputerVision/plots'
+
+    # Experiment 1
+    for experiment in [1,2,3]:
+        for query in ['Average Accuracy', 'Average Loss', 'Average Training Loss', 'Average Training Accuracy', 'Train Time']:
+            plotting.plot(results, experiment, outdir, query)
+
+
+    # # Experiment 2
+    # plotting.plot(results, 2, outdir, loss=False)
+    # plotting.plot(results, 2, outdir, loss=True)
+
+    # # Experiment 3
+    # plotting.plot(results, 3, outdir, loss=False)
+    # plotting.plot(results, 3, outdir, loss=True)
