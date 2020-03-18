@@ -296,6 +296,7 @@ class InceptionI3d(nn.Module):
         end_point = 'Logits'
         self.avg_pool = nn.AvgPool3d(kernel_size=[2, 7, 7],
                                      stride=(1, 1, 1))
+        
         self.dropout = nn.Dropout(dropout_keep_prob)
         self.logits = Unit3D(in_channels=384+384+128+128, output_channels=self._num_classes,
                              kernel_shape=[1, 1, 1],
@@ -333,10 +334,21 @@ class InceptionI3d(nn.Module):
             logits = x.squeeze(3).squeeze(3)
         # logits is batch X time X classes, which is what we want to work with
         return logits
+
+    def extract_features_for_layer(self, x, layer_in=None, layer_out='Mixed_5c'):
+        if layer_in is None:
+            layer_in = self.VALID_ENDPOINTS[0]
+        valid_endpoints = self.VALID_ENDPOINTS[self.VALID_ENDPOINTS.index(layer_in):self.VALID_ENDPOINTS.index(layer_out)+1]
+        for end_point in valid_endpoints:
+            if end_point in self.end_points:
+                x = self._modules[end_point](x)
+        return x
+        # return self.avg_pool(x)  # torch.Size([1, 1024, 7, 1, 1])
         
 
     def extract_features(self, x):
         for end_point in self.VALID_ENDPOINTS:
             if end_point in self.end_points:
                 x = self._modules[end_point](x)
-        return self.avg_pool(x)
+        return self.avg_pool(x)  # torch.Size([1, 1024, 7, 1, 1])
+        # return x  # torch.Size([1, 1024, 8, 7, 7]
